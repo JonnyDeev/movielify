@@ -1,6 +1,7 @@
 const ctrl = {};
 const crypto = require("crypto");
 const User = require("./models/User");
+const Review = require("./models/Review");
 const bcrypt = require("bcrypt");
 const axios = require("axios");
 const dotenv = require("dotenv");
@@ -153,11 +154,15 @@ ctrl.editComment = async (req, res) => {
       message: "Comment not found",
     });
   }
-  await Comment.updateOne({ id: id }, { content: content });
-  return res.status(200).json({
-    ok: true,
-    message: "Comment updated successfully",
-  });
+  try {
+    await Comment.updateOne({ id: id }, { content: content });
+    return res.status(200).json({
+      ok: true,
+      message: "Comment updated successfully",
+    });
+  } catch (error) {
+    
+  }
 };
 
 ctrl.deleteComment = async (req, res) => {
@@ -169,35 +174,135 @@ ctrl.deleteComment = async (req, res) => {
       message: "Comment not found",
     });
   }
-  await Comment.findOneAndDelete({ id: id });
-  return res.status(200).json({
-    ok: true,
-    message: "Comment deleted successfully",
-  });
+  try {
+    await Comment.findOneAndDelete({ id: id });
+    return res.status(200).json({
+      ok: true,
+      message: "Comment deleted successfully",
+    });
+  } catch (error) {
+    console.error(error);
+  }
 };
 
 ctrl.likeAComment = async (req, res) => {
   const { id, userId, liked } = req.body;
-  const findComment = await Comment.findOne({ "id": id });
-  console.log(findComment)
+  const findComment = await Comment.findOne({ id: id });
+  console.log(findComment);
   if (!findComment) {
     return res.status(404).json({
       ok: false,
       message: "Comment not found",
     });
   }
-  if(!liked){
-    await Comment.updateOne({"id": id},{'$inc': { "likesCount": 1 },  "$push":{'likes': userId}})
-    return res.status(200).json({
-      liked: !liked
-    })
+  if (!liked) {
+    try {
+      await Comment.updateOne(
+        { id: id },
+        { $inc: { likesCount: 1 }, $push: { likes: userId } }
+      );
+      return res.status(200).json({
+        liked: !liked,
+      });
+    } catch (error) {
+      console.error(error);
+    }
   }
-  if(liked){
-    await Comment.updateOne({"id": id}, {'$inc':{"likesCount": -1}, "$pull":{'likes': userId}})
-    return res.status(200).json({
-      liked: !liked
-    }); 
+  if (liked) {
+    try {
+      await Comment.updateOne(
+        { id: id },
+        { $inc: { likesCount: -1 }, $pull: { likes: userId } }
+      );
+      return res.status(200).json({
+        liked: !liked,
+      });
+    } catch (error) {
+      console.error(error);
+    }
   }
 };
+
+ctrl.replyAComment = async (req, res) => {
+  const { id, owner, content } = req.body;
+  const findComment = await Comment.findOne({ id: id });
+  if (!findComment) {
+    return res.status(404).json({
+      ok: false,
+      message: "Comment not found",
+    });
+  }
+  const reply_id = crypto.randomUUID();
+  const newReply = {
+    id: reply_id,
+    owner: owner,
+    content: content,
+  };
+  try {
+    await Comment.updateOne(
+      { id: id },
+      { $inc: { repliesCount: 1 }, $push: { replies: newReply } }
+    );
+    return res.status(200).json({
+      ok: true,
+      message: "Reply sent successfully",
+    });
+  } catch (error) {
+    console.error(error);
+  }
+};
+
+ctrl.submitReview = async (req, res) => {
+  const { owner, ownerId, calification, comment, movieId } = req.body;
+  const id = crypto.randomUUID();
+  const newReview = new Review({
+    owner,
+    ownerId,
+    id: id,
+    calification,
+    comment,
+    movieId,
+  });
+  try {
+    await newReview.save();
+    return res
+      .status(200)
+      .json({ ok: true, message: "Review saved successfully" });
+  } catch (error) {
+    console.log(error);
+  }
+};
+
+ctrl.getReviews = async (req, res)=>{
+  const {id} = req.params;
+  const findReviews = await Review.findOne({'movieId':id})
+  if(!findReviews){
+    return res.status(404).json({
+      ok: false,
+      message: 'Reviews not found'
+    })
+  }
+  return res.status(200).json({
+    ok: true,
+    findReviews
+  })
+
+}
+
+ctrl.getComments = async (req, res)=>{
+  const {id} = req.params;
+  const findComments = await Comment.findOne({'id':id})
+  if(!findComments){
+    return res.status(404).json({
+      ok: false,
+      message: 'Comments not found'
+    })
+  }
+  return res.status(200).json({
+    ok: true,
+    findComments
+  })
+}
+
 
 module.exports = ctrl;
